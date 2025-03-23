@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import { createRoom, joinRoom, leaveRoom } from "./dbOperations.js";
+import { addMessageToCollab, createRoom, joinRoom, leaveRoom } from "./dbOperations.js";
 
 const app = express();
 
@@ -36,6 +36,21 @@ io.on("connection", (socket) => {
 
     cb(res);
   });
+
+  socket.on("add message", async ({ message, byUser, collabId, username }, cb) => {
+    try{
+      const res = await addMessageToCollab(message, byUser, collabId, username)
+      
+      if(res.success){
+        console.log("added, emitting new message by" ,username);
+        
+        socket.broadcast.to(collabId).emit("new message",{ message, byUser, username } )
+      }
+    }
+    catch(err) {
+      console.error("Error while adding message", err)
+    }
+  })
 
   socket.on("disconnect", async () => {
     const res = await leaveRoom(socket.id);

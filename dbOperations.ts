@@ -26,12 +26,17 @@ export async function createRoom() {
   const name = generateRandomName();
 
   try {
-    await redis.set(`collab:${collabId}`, name);
+    await redis.set(
+      `collab:${collabId}`,
+      JSON.stringify({
+        name: name,
+        messages: [{ message: "Hello world", byUser: false }],
+      })
+    );
 
     await redis.zadd("active:rooms", now, collabId);
-    console.log("create response", { success: true, collabId, name });
 
-    return { success: true, collabId, name };
+    return { success: true, collabId, name: name };
   } catch (err) {
     console.error("Error creating collab:", err);
     throw err;
@@ -44,10 +49,12 @@ export async function joinRoom(
   username: string
 ) {
   try {
-    const collabName = await redis.get(`collab:${collabId}`);
-    if (!collabName) {
+    const collab = await redis.get(`collab:${collabId}`);
+    if (!collab) {
       return { success: false, message: "Collab does not exist" };
     }
+    const { name, messages } = JSON.parse(collab);
+
     const memberCount = await redis.scard(`collab:members:${collabId}`);
     const maxUsers = 5;
     console.log("members in ", collabId, " is", memberCount);
@@ -66,10 +73,9 @@ export async function joinRoom(
 
     await redis.zadd("active:rooms", Date.now(), collabId);
 
-    return { success: true, name: collabName };
+    return { success: true, name: name, allMessages: messages };
   } catch (err) {
-    console.error("Error joining room:", err);
-    throw err;
+    return { success: false, message: `failed to join room ${collabId}` };
   }
 }
 
@@ -118,6 +124,34 @@ async function getUserDetails(userId: string) {
   } catch (err) {
     console.error("Error getting user details:", err);
     throw err;
+  }
+}
+
+export async function addMessageToCollab(
+  message: string,
+  byUser: boolean,
+  collabId: string,
+  username?: string,
+) {
+  try {
+    const collab = await redis.get(`collab:${collabId}`);
+    if (!collab) {
+      return { success: false, message: "Collab does not exist" };
+    }
+    const { name, messages } = JSON.parse(collab);
+
+    const updatedMessages = [...messages, { message, byUser, username }];
+
+    await redis.set(
+      `collab:${collabId}`,
+      JSON.stringify({ name: name, messages: updatedMessages })
+    );
+
+    console.log("added msgs", updatedMessages);
+
+    return { success: true };
+  } catch {
+    return { success: false };
   }
 }
 
