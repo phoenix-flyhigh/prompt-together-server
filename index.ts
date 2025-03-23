@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import { createRoom, joinRoom } from "./dbOperations.js";
+import { createRoom, joinRoom, leaveRoom } from "./dbOperations.js";
 
 const app = express();
 
@@ -25,7 +25,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join room", async ({ roomId, username }, cb) => {
-    const res = await joinRoom(roomId, socket.id);
+    const res = await joinRoom(roomId, socket.id, username);
 
     socket.join(roomId);
 
@@ -37,7 +37,21 @@ io.on("connection", (socket) => {
     cb(res);
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
+    const res = await leaveRoom(socket.id);
+
+    const {success, collabExists, collabId, username} = res
+
+    if (!success) {
+      setTimeout(async () => {
+        await leaveRoom(socket.id);
+      }, 2000);
+    }
+    if (success && collabExists){
+      console.log("emitting user left");
+      
+      io.to(collabId).emit("user left", username);
+    }
   });
 });
 
