@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import shortid from "shortid";
+import { createRoom, joinRoom } from "./dbOperations.js";
 
 const app = express();
 
@@ -11,65 +11,33 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3001", // Change to your frontend URL
+    origin: process.env.FRONTEND_URL,
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
   },
 });
 
-type Room = { [key: string]: { id: string; users: { id: string }[] } };
-
-const rooms: Room = {};
-
-
 io.on("connection", (socket) => {
-  socket.on("createRoom", (cb) => {
-    const roomId = shortid.generate();
-    const user = { id: socket.id };
-    rooms[roomId] = { id: roomId, users: [user] };
-    socket.join(roomId);
-
-    console.log("Room created", roomId);
-    cb({ success: true, roomId });
+  socket.on("create room", async (cb) => {
+    const { success, collabId, name } = await createRoom();
+    cb({ success, collabId, name });
   });
 
-  socket.on("join room", ({ roomId }, cb) => {
-    if (!rooms[roomId]) {
-      return cb({ success: false, message: "Session doesn't exist" });
-    }
-    if (rooms[roomId].users.length >= 10) {
-      return cb({
-        success: false,
-        message: "Session is crowded, pls start a new session",
-      });
-    }
+  socket.on("join room", async ({ roomId, username }, cb) => {
+    const res = await joinRoom(roomId, socket.id);
 
     socket.join(roomId);
-    const user = { id: socket.id };
 
-    io.to(roomId).emit("user joined", user);
-    console.log(`User ${user.id} successfully joined ${roomId}`);
+    if (res.success) {
+      io.to(roomId).emit("user joined", username);
+      console.log(`User ${username} successfully joined ${res.name}`);
+    }
 
-    cb({ success: true, roomId });
+    cb(res);
   });
 
   socket.on("disconnect", () => {
-    let userRoom;
-    for (const roomId in rooms) {
-      if (rooms[roomId].users.find((user) => user.id === socket.id)) {
-        userRoom === roomId;
-        return;
-      }
-    }
-    if (!userRoom) return;
-    rooms[userRoom].users = rooms[userRoom].users.filter(
-      (user) => user.id !== socket.id
-    );
-
-    if (rooms[userRoom].users.length === 0) [delete rooms[userRoom]];
-
-    io.to(userRoom).emit("user left", socket.id);
   });
 });
 
