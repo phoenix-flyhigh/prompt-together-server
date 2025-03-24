@@ -131,7 +131,7 @@ export async function addMessageToCollab(
   message: string,
   byUser: boolean,
   collabId: string,
-  username?: string,
+  username?: string
 ) {
   try {
     const collab = await redis.get(`collab:${collabId}`);
@@ -152,6 +152,32 @@ export async function addMessageToCollab(
     return { success: true };
   } catch {
     return { success: false };
+  }
+}
+
+export async function addTypingUser(username: string, collabId: string) {
+  try {
+    await redis.sadd(`collab:typing:${collabId}`, username);
+
+    const users = await redis.smembers(`collab:typing:${collabId}`);
+
+    return users;
+  } catch (err) {
+    console.error("error adding typing user", err);
+    throw err;
+  }
+}
+
+export async function removeTypingUser(username: string, collabId: string) {
+  try {
+    await redis.srem(`collab:typing:${collabId}`, username);
+
+    const users = await redis.smembers(`collab:typing:${collabId}`);
+
+    return users;
+  } catch (err) {
+    console.error("error adding typing user", err);
+    throw err;
   }
 }
 

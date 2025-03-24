@@ -2,7 +2,14 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import { addMessageToCollab, createRoom, joinRoom, leaveRoom } from "./dbOperations.js";
+import {
+  addMessageToCollab,
+  addTypingUser,
+  createRoom,
+  joinRoom,
+  leaveRoom,
+  removeTypingUser,
+} from "./dbOperations.js";
 
 const app = express();
 
@@ -37,34 +44,63 @@ io.on("connection", (socket) => {
     cb(res);
   });
 
-  socket.on("add message", async ({ message, byUser, collabId, username }, cb) => {
-    try{
-      const res = await addMessageToCollab(message, byUser, collabId, username)
-      
-      if(res.success){
-        console.log("added, emitting new message by" ,username);
-        
-        socket.broadcast.to(collabId).emit("new message",{ message, byUser, username } )
+  socket.on(
+    "add message",
+    async ({ message, byUser, collabId, username }, cb) => {
+      try {
+        const res = await addMessageToCollab(
+          message,
+          byUser,
+          collabId,
+          username
+        );
+
+        if (res.success) {
+          console.log("added, emitting new message by", username);
+
+          socket.broadcast
+            .to(collabId)
+            .emit("new message", { message, byUser, username });
+        }
+      } catch (err) {
+        console.error("Error while adding message", err);
       }
     }
-    catch(err) {
-      console.error("Error while adding message", err)
+  );
+
+  socket.on("started typing", async ({ username, collabId }) => {
+    try {
+      const users: string[] = await addTypingUser(username, collabId);
+
+      socket.broadcast.to(collabId).emit("typing", { users });
+    } catch {
+      console.error("failed to add user");
     }
-  })
+  });
+
+  socket.on("stopped typing", async ({ username, collabId }) => {
+    try {
+      const users: string[] = await removeTypingUser(username, collabId);
+      
+      socket.broadcast.to(collabId).emit("typing", { users });
+    } catch {
+      console.error("failed to add user");
+    }
+  });
 
   socket.on("disconnect", async () => {
     const res = await leaveRoom(socket.id);
 
-    const {success, collabExists, collabId, username} = res
+    const { success, collabExists, collabId, username } = res;
 
     if (!success) {
       setTimeout(async () => {
         await leaveRoom(socket.id);
       }, 2000);
     }
-    if (success && collabExists){
+    if (success && collabExists) {
       console.log("emitting user left");
-      
+
       io.to(collabId).emit("user left", username);
     }
   });
