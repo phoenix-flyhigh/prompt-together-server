@@ -37,7 +37,7 @@ io.on("connection", (socket) => {
     socket.join(roomId);
 
     if (res.success) {
-      io.to(roomId).emit("user joined", username);
+      socket.broadcast.to(roomId).emit("user joined", username);
       console.log(`User ${username} successfully joined ${res.name}`);
     }
 
@@ -57,10 +57,12 @@ io.on("connection", (socket) => {
 
         if (res.success) {
           console.log("added, emitting new message by", username);
-
-          socket.broadcast
-            .to(collabId)
-            .emit("new message", { message, byUser, username });
+          if(byUser){
+            socket.broadcast.to(collabId).emit("new message", { message, byUser, username });
+          }
+          else {
+            io.to(collabId).emit("new message", { message, byUser, username });
+          }
         }
       } catch (err) {
         console.error("Error while adding message", err);
@@ -81,7 +83,7 @@ io.on("connection", (socket) => {
   socket.on("stopped typing", async ({ username, collabId }) => {
     try {
       const users: string[] = await removeTypingUser(username, collabId);
-      
+
       socket.broadcast.to(collabId).emit("typing", { users });
     } catch {
       console.error("failed to add user");
