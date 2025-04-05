@@ -34,8 +34,6 @@ export async function createRoom() {
       })
     );
 
-    await redis.zadd("active:rooms", now, collabId);
-
     return { success: true, collabId, name: name };
   } catch (err) {
     console.error("Error creating collab:", err);
@@ -71,17 +69,20 @@ export async function joinRoom(
       JSON.stringify({ collabId, username })
     );
 
-    await redis.zadd("active:rooms", Date.now(), collabId);
+    const memberIds = await redis.smembers(`collab:members:${collabId}`);
+    let usernames = [];
 
-    const memberIds = await redis.smembers(`collab:members:${collabId}`)
-    let usernames = []
-
-    for (let memberId of memberIds){      
-      const {username} = await getUserDetails(memberId)
-      usernames.push(username)
+    for (let memberId of memberIds) {
+      const { username } = await getUserDetails(memberId);
+      usernames.push(username);
     }
 
-    return { success: true, name: name, allMessages: messages, members: usernames };
+    return {
+      success: true,
+      name: name,
+      allMessages: messages,
+      members: usernames,
+    };
   } catch (err) {
     return { success: false, message: `failed to join room ${collabId}` };
   }
@@ -106,8 +107,6 @@ async function deleteRoom(collabId: string) {
 
     await redis.del(`collab:${collabId}`);
     await redis.del(`collab:members:${collabId}`);
-
-    await redis.zrem("active:rooms", collabId);
 
     console.log("deleted room", collabId);
 
