@@ -37,7 +37,9 @@ io.on("connection", (socket) => {
     socket.join(roomId);
 
     if (res.success) {
-      socket.broadcast.to(roomId).emit("user joined", username);
+      socket.broadcast
+        .to(roomId)
+        .emit("user joined", { username, members: res.members });
       console.log(`User ${username} successfully joined ${res.name}`);
     }
 
@@ -57,10 +59,11 @@ io.on("connection", (socket) => {
 
         if (res.success) {
           console.log("added, emitting new message by", username);
-          if(byUser){
-            socket.broadcast.to(collabId).emit("new message", { message, byUser, username });
-          }
-          else {
+          if (byUser) {
+            socket.broadcast
+              .to(collabId)
+              .emit("new message", { message, byUser, username });
+          } else {
             io.to(collabId).emit("new message", { message, byUser, username });
           }
         }
@@ -103,7 +106,7 @@ io.on("connection", (socket) => {
     if (success && collabExists) {
       console.log("emitting user left");
 
-      io.to(collabId).emit("user left", username);
+      socket.broadcast.to(collabId).emit("user left", username);
     }
   });
 });

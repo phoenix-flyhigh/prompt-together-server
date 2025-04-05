@@ -73,7 +73,15 @@ export async function joinRoom(
 
     await redis.zadd("active:rooms", Date.now(), collabId);
 
-    return { success: true, name: name, allMessages: messages };
+    const memberIds = await redis.smembers(`collab:members:${collabId}`)
+    let usernames = []
+
+    for (let memberId of memberIds){      
+      const {username} = await getUserDetails(memberId)
+      usernames.push(username)
+    }
+
+    return { success: true, name: name, allMessages: messages, members: usernames };
   } catch (err) {
     return { success: false, message: `failed to join room ${collabId}` };
   }
