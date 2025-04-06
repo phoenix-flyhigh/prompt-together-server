@@ -67,8 +67,9 @@ io.on("connection", (socket) => {
             io.to(collabId).emit("new message", { message, byUser, username });
           }
         }
+        cb({success: true})
       } catch (err) {
-        console.error("Error while adding message", err);
+        cb({success: false})
       }
     }
   );

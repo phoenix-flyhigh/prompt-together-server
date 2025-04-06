@@ -30,7 +30,7 @@ export async function createRoom() {
       `collab:${collabId}`,
       JSON.stringify({
         name: name,
-        messages: [{ message: "Hello world", byUser: false }],
+        messages: [],
       })
     );
 
@@ -107,6 +107,7 @@ async function deleteRoom(collabId: string) {
 
     await redis.del(`collab:${collabId}`);
     await redis.del(`collab:members:${collabId}`);
+    await redis.del(`collab:typing:${collabId}`)
 
     console.log("deleted room", collabId);
 
