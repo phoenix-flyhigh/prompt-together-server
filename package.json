@@ -5,8 +5,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "tsc && node index.js",
+    "build": "npm install && tsc",
+    "start": "node index.js",
     "dev": "tsc --watch"
   },
   "author": "",
