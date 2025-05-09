@@ -55,13 +55,11 @@ export async function joinRoom(
 
     const memberCount = await redis.scard(`collab:members:${collabId}`);
     const maxUsers = 5;
-    console.log("members in ", collabId, " is", memberCount);
 
     if (memberCount >= maxUsers) {
       return { success: false, message: "Collab room is full" };
     }
 
-    console.log("not full");
     await redis.sadd(`collab:members:${collabId}`, userId);
 
     await redis.set(
@@ -154,8 +152,6 @@ export async function addMessageToCollab(
       `collab:${collabId}`,
       JSON.stringify({ name: name, messages: updatedMessages })
     );
-
-    console.log("added msgs", updatedMessages);
 
     return { success: true };
   } catch {

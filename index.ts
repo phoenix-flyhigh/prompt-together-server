@@ -58,7 +58,6 @@ io.on("connection", (socket) => {
         );
 
         if (res.success) {
-          console.log("added, emitting new message by", username);
           if (byUser) {
             socket.broadcast
               .to(collabId)
