@@ -2,6 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
+import mongoose from "mongoose";
 import {
   addMessageToCollab,
   addTypingUser,
@@ -66,9 +67,9 @@ io.on("connection", (socket) => {
             io.to(collabId).emit("new message", { message, byUser, username });
           }
         }
-        cb({success: true})
+        cb({ success: true });
       } catch (err) {
-        cb({success: false})
+        cb({ success: false });
       }
     }
   );
@@ -112,6 +113,12 @@ io.on("connection", (socket) => {
 });
 
 const port = process.env.PORT || 8080;
+
+const mongoUri = process.env.MONGODB_URI || 'http://localhost:27017/collabdb';
+mongoose
+  .connect(mongoUri)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
 server.listen(port, () => {
   console.log("Server listering at port", port);

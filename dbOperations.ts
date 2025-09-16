@@ -1,6 +1,5 @@
 import shortid from "shortid";
-import redis from "./redis-client.js";
-
+import { Collab } from "./models.js";
 import {
   uniqueNamesGenerator,
   adjectives,
@@ -8,33 +7,30 @@ import {
   animals,
   Config,
 } from "unique-names-generator";
+import redis from "./redis-client.js";
 
 const generateRandomName = (): string => {
   const config: Config = {
-    dictionaries: [adjectives, colors, animals], // Combine 3 dictionaries
+    dictionaries: [adjectives, colors, animals],
     separator: "-",
-    length: 2, // Two-word combinations like 'frosty-waterfall'
+    length: 2,
     style: "lowerCase",
   };
-
   return uniqueNamesGenerator(config);
 };
 
 export async function createRoom() {
   const collabId = shortid();
-  const now = Date.now();
   const name = generateRandomName();
-
   try {
-    await redis.set(
-      `collab:${collabId}`,
-      JSON.stringify({
-        name: name,
-        messages: [],
-      })
-    );
-
-    return { success: true, collabId, name: name };
+    await Collab.create({
+      collabId,
+      name,
+      messages: [],
+      members: [],
+      typingUsers: [],
+    });
+    return { success: true, collabId, name };
   } catch (err) {
     console.error("Error creating collab:", err);
     throw err;
@@ -47,89 +43,23 @@ export async function joinRoom(
   username: string
 ) {
   try {
-    const collab = await redis.get(`collab:${collabId}`);
+    const collab = await Collab.findOne({ collabId });
     if (!collab) {
       return { success: false, message: "Collab does not exist" };
     }
-    const { name, messages } = JSON.parse(collab);
-
-    const memberCount = await redis.scard(`collab:members:${collabId}`);
-    const maxUsers = 5;
-
-    if (memberCount >= maxUsers) {
+    if (collab.members.length >= 5) {
       return { success: false, message: "Collab room is full" };
     }
-
-    await redis.sadd(`collab:members:${collabId}`, userId);
-
-    await redis.set(
-      `user:collabs:${userId}`,
-      JSON.stringify({ collabId, username })
-    );
-
-    const memberIds = await redis.smembers(`collab:members:${collabId}`);
-    let usernames = [];
-
-    for (let memberId of memberIds) {
-      const { username } = await getUserDetails(memberId);
-      usernames.push(username);
-    }
-
+    collab.members.push({ userId, username });
+    await collab.save();
     return {
       success: true,
-      name: name,
-      allMessages: messages,
-      members: usernames,
+      name: collab.name,
+      allMessages: collab.messages,
+      members: collab.members.map((m) => m.username),
     };
   } catch (err) {
     return { success: false, message: `failed to join room ${collabId}` };
-  }
-}
-
-async function getRoomMembers(collabId: string) {
-  try {
-    return await redis.smembers(`collab:members:${collabId}`);
-  } catch (err) {
-    console.error("Error getting room members:", err);
-    throw err;
-  }
-}
-
-async function deleteRoom(collabId: string) {
-  try {
-    const members = await getRoomMembers(collabId);
-
-    for (const userId of members) {
-      await redis.del(`user:collabs:${userId}`);
-    }
-
-    await redis.del(`collab:${collabId}`);
-    await redis.del(`collab:members:${collabId}`);
-    await redis.del(`collab:typing:${collabId}`)
-
-    console.log("deleted room", collabId);
-
-    return true;
-  } catch (err) {
-    console.error("Error deleting room:", err);
-    throw err;
-  }
-}
-
-async function getUserDetails(userId: string) {
-  try {
-    const user = await redis.get(`user:collabs:${userId}`);
-
-    if (!user) {
-      throw new Error("Error getting user details");
-    }
-
-    const { collabId, username } = JSON.parse(user);
-
-    return { collabId, username };
-  } catch (err) {
-    console.error("Error getting user details:", err);
-    throw err;
   }
 }
 
@@ -140,19 +70,12 @@ export async function addMessageToCollab(
   username?: string
 ) {
   try {
-    const collab = await redis.get(`collab:${collabId}`);
+    const collab = await Collab.findOne({ collabId });
     if (!collab) {
       return { success: false, message: "Collab does not exist" };
     }
-    const { name, messages } = JSON.parse(collab);
-
-    const updatedMessages = [...messages, { message, byUser, username }];
-
-    await redis.set(
-      `collab:${collabId}`,
-      JSON.stringify({ name: name, messages: updatedMessages })
-    );
-
+    collab.messages.push({ message, byUser, username });
+    await collab.save();
     return { success: true };
   } catch {
     return { success: false };
@@ -162,9 +85,7 @@ export async function addMessageToCollab(
 export async function addTypingUser(username: string, collabId: string) {
   try {
     await redis.sadd(`collab:typing:${collabId}`, username);
-
     const users = await redis.smembers(`collab:typing:${collabId}`);
-
     return users;
   } catch (err) {
     console.error("error adding typing user", err);
@@ -175,33 +96,36 @@ export async function addTypingUser(username: string, collabId: string) {
 export async function removeTypingUser(username: string, collabId: string) {
   try {
     await redis.srem(`collab:typing:${collabId}`, username);
-
     const users = await redis.smembers(`collab:typing:${collabId}`);
-
     return users;
   } catch (err) {
-    console.error("error adding typing user", err);
+    console.error("error removing typing user", err);
     throw err;
   }
 }
 
 export async function leaveRoom(userId: string) {
   try {
-    const { collabId, username } = await getUserDetails(userId);
-
-    await redis.srem(`collab:members:${collabId}`, userId);
-
-    await redis.del(`user:collabs:${userId}`);
-
-    const memberCount = await redis.scard(`collab:members:${collabId}`);
-
-    if (memberCount === 0) {
-      await deleteRoom(collabId);
+    const collab = await Collab.findOne({ "members.userId": userId });
+    if (!collab) return { success: false };
+    const member = collab.members.find((m) => m.userId === userId);
+    collab.members = collab.members.filter((m) => m.userId !== userId);
+    // Remove typing status from Redis
+    if (member?.username) {
+      await redis.srem(`collab:typing:${collab.collabId}`, member.username);
     }
-
-    console.log("User", username, "left collab", collabId);
-
-    return { success: true, collabId, collabExists: !!memberCount, username };
+    if (collab.members.length === 0) {
+      await Collab.deleteOne({ collabId: collab.collabId });
+      await redis.del(`collab:typing:${collab.collabId}`);
+    } else {
+      await collab.save();
+    }
+    return {
+      success: true,
+      collabId: collab.collabId,
+      collabExists: collab.members.length > 0,
+      username: member?.username,
+    };
   } catch {
     return { success: false };
   }
