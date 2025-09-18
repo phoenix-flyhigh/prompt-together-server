@@ -6,9 +6,9 @@ import mongoose from "mongoose";
 import {
   addMessageToCollab,
   addTypingUser,
-  createRoom,
-  joinRoom,
-  leaveRoom,
+  createCollab,
+  joinCollab,
+  leaveCollab,
   removeTypingUser,
 } from "./dbOperations.js";
 
@@ -27,19 +27,19 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  socket.on("create room", async (cb) => {
-    const { success, collabId, name } = await createRoom();
+  socket.on("create collab", async (cb) => {
+    const { success, collabId, name } = await createCollab();
     cb({ success, collabId, name });
   });
 
-  socket.on("join room", async ({ roomId, username }, cb) => {
-    const res = await joinRoom(roomId, socket.id, username);
+  socket.on("join collab", async ({ collabId, username }, cb) => {
+    const res = await joinCollab(collabId, socket.id, username);
 
-    socket.join(roomId);
+    socket.join(collabId);
 
     if (res.success) {
       socket.broadcast
-        .to(roomId)
+        .to(collabId)
         .emit("user joined", { username, members: res.members });
       console.log(`User ${username} successfully joined ${res.name}`);
     }
@@ -95,13 +95,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", async () => {
-    const res = await leaveRoom(socket.id);
+    const res = await leaveCollab(socket.id);
 
     const { success, collabExists, collabId, username } = res;
 
     if (!success) {
       setTimeout(async () => {
-        await leaveRoom(socket.id);
+        await leaveCollab(socket.id);
       }, 2000);
     }
     if (success && collabExists) {
@@ -114,7 +114,7 @@ io.on("connection", (socket) => {
 
 const port = process.env.PORT || 8080;
 
-const mongoUri = process.env.MONGODB_URI || 'http://localhost:27017/collabdb';
+const mongoUri = process.env.MONGODB_URI || "http://localhost:27017/collabdb";
 mongoose
   .connect(mongoUri)
   .then(() => console.log("MongoDB connected"))

@@ -19,7 +19,7 @@ const generateRandomName = (): string => {
   return uniqueNamesGenerator(config);
 };
 
-export async function createRoom() {
+export async function createCollab() {
   const collabId = shortid();
   const name = generateRandomName();
   try {
@@ -37,7 +37,7 @@ export async function createRoom() {
   }
 }
 
-export async function joinRoom(
+export async function joinCollab(
   collabId: string,
   userId: string,
   username: string
@@ -48,7 +48,7 @@ export async function joinRoom(
       return { success: false, message: "Collab does not exist" };
     }
     if (collab.members.length >= 5) {
-      return { success: false, message: "Collab room is full" };
+      return { success: false, message: "Collab is full" };
     }
     collab.members.push({ userId, username });
     await collab.save();
@@ -59,7 +59,7 @@ export async function joinRoom(
       members: collab.members.map((m) => m.username),
     };
   } catch (err) {
-    return { success: false, message: `failed to join room ${collabId}` };
+    return { success: false, message: `failed to join collab ${collabId}` };
   }
 }
 
@@ -104,7 +104,7 @@ export async function removeTypingUser(username: string, collabId: string) {
   }
 }
 
-export async function leaveRoom(userId: string) {
+export async function leaveCollab(userId: string) {
   try {
     const collab = await Collab.findOne({ "members.userId": userId });
     if (!collab) return { success: false };
